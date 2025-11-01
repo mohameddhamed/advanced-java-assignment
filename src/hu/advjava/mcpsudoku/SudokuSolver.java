@@ -2,12 +2,11 @@ package hu.advjava.mcpsudoku;
 
 import java.io.File;
 import java.io.IOException;
-import java.util.Arrays;
-import java.util.Iterator;
-import java.util.Optional;
-import java.util.Random;
+import java.text.CollationElementIterator;
+import java.util.*;
 import java.util.function.BiPredicate;
 import java.util.function.Predicate;
+import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 import java.util.stream.Stream;
 
@@ -120,28 +119,48 @@ public class SudokuSolver {
 
 //    It uses a helper: maybeGenerateBoard tries to make a board in the following way.
 
-//    Then it makes a stream using iterate.
-//            Initially, the iteration state is a deepCopy of the generated board.
-//    Our goal is to remove enough cells so that we match the requirements of the difficulty level.
-//    In each iteration:
-//    Take the next cell by the iterator and erase its value on the board (set it as zero).
-//    See if the board is still uniquely solvable: use the DLX solution counter with a limit of 2, and if it returns 1, it is.
-//    If the board has no unique solution anymore, put the digit back from the original solution.
-//    Return the board itself so that the condition in the following step is easy to check.
-//    Make sure to take at most 9×9 steps: we don't have more board cells.
-//    If the board in the state is of the expected difficulty, we're done.
-    private static /* maybe a board, maybe nothing */ maybeGenerateBoard(Difficulty diff, SudokuSolverDLX ssdlx) {
+    private static /* maybe a board, maybe nothing */ Optional<int[][]> maybeGenerateBoard(Difficulty diff, SudokuSolverDLX ssdlx) {
 //    It creates an empty 9×9 board and fills it with a random complete solution using solve in ssdlx.
         int[][] board = new int[9][9];
         boolean isFilledBoard = ssdlx.solve(board);
 //    It creates all possible cell indexes in a list (cells) and puts them in a random order. Then it puts its iterator into a variable.
-        int[][] randomBoard = new int[9][9];
 
-
-        Stream.iterate(0, i -> i < 10, i -> i + 1).flatMap(row ->
+        List<int[]> allPossibleIndexes = Stream.iterate(0, i -> i < 10, i -> i + 1).flatMap(row ->
                 IntStream.range(0, 10).mapToObj(col -> new int[]{row, col})
-        );
+        ).toList();
 
+        Collections.shuffle(allPossibleIndexes);
+
+        Iterator<int[]> itsIterator = allPossibleIndexes.iterator();
+
+//    Then it makes a stream using iterate.
+
+//    Our goal is to remove enough cells so that we match the requirements of the difficulty level.
+
+//            Initially, the iteration state is a deepCopy of the generated board.
+        Stream.iterate(deepCopy(board), (_board) -> {
+//    Make sure to take at most 9×9 steps: we don't have more board cells.
+//    If the board in the state is of the expected difficulty, we're done.
+
+            return countFilledCells(_board) == 0 || Difficulty.numToDifficulty(countFilledCells(_board)) == diff;
+
+        }, (_board) -> {
+//    In each iteration:
+//    Take the next cell by the iterator and erase its value on the board (set it as zero).
+            int[] nextValue = itsIterator.next();
+            int originalValue = _board[nextValue[0]][nextValue[1]];
+            _board[nextValue[0]][nextValue[1]] = 0;
+//    See if the board is still uniquely solvable: use the DLX solution counter with a limit of 2, and if it returns 1, it is.
+            if (ssdlx.countSolutions(board, 2) != 1) {
+//    If the board has no unique solution anymore, put the digit back from the original solution.
+                _board[nextValue[0]][nextValue[1]] = originalValue;
+//    Return the board itself so that the condition in the following step is easy to check.
+            }
+            return _board;
+
+        });
+
+        return Optional.of(board);
     }
 
 	public static State solveCount(int[][] board) {
@@ -150,10 +169,19 @@ public class SudokuSolver {
 
     record Remaining(int cellIdx, Iterator<Integer> digits) {}
 
+//    Implement solve in SudokuSolver.
+
+//    The method prepares a couple of variables.
+
 	public static State solve(int[][] board, boolean randomize) {
-        var cells  = // TODO [0,0], [0,1], ..., [8,8] as a modifiable list
-        		     // in random order if `randomize` is on
-		var digits = // 1,...,9 as a list; in random order if `randomize` is on
+//    cells are those cells on the board that contain 0. These are the cells that we are trying to fill in here.
+        var cells = Arrays.stream(board).flatMapToInt(row -> Arrays.stream(row).filter(col -> col == 0)).boxed().collect(Collectors.toList());
+        //    Both are in random order if the parameter says so.
+        if (randomize) Collections.shuffle(cells);// TODO [0,0], [0,1], ..., [8,8] as a modifiable list
+//    digits are the numbers 1..9. These are the values that we are trying to put in.
+        // in random order if `randomize` is on
+        var digits = new ArrayList<>(List.of(new int[]{1, 2, 3, 4, 5, 6, 7, 8, 9}));
+        if (randomize) Collections.shuffle(digits); // 1,...,9 as a list; in random order if `randomize` is on
 
         // Trivial case: no blanks → already solved
         if (cells.isEmpty()) return State.SOLVED;
@@ -164,6 +192,18 @@ public class SudokuSolver {
 		return findContent(() -> maybeSolve(board, cells, digits, stack));
 	}
 
+//    maybeSolve does the heavy lifting here.
+//    It keeps track of a stack: the digits that we have already put in.
+//    If nth element of the stack is i, that means that we have currently inserted digits[i] into cells[n].
+//    We start by trying the first potential digit in the first position.
+//    It does the following.
+//    If the stack is empty, we have failed to fill in the puzzle, and the result is INVALID.
+//    Otherwise, we try to put in a new value to the current cell. If we are out of values (the topmost element is 9 indicating that we have tried all values of digits at the current cell), then we pop the top element off the stack, set the board's cell as empty, and we return: the result is still undecided.
+//    Otherwise, we increase the topmost element's value.
+//    As we are trying to fit in a new value, let's call isSafe to check if we may. If we may not, we return: the result is undecided.
+//    Let's set the cell's value on the board now. If it was the last position in cells, then congratulations, the board is complete, and the result is SOLVED.
+//    Otherwise, more cells need to be filled in. Let's put 0 on the stack, and the result is still undecided.
+//    Note: all of this implements a backtracking Sudoku solver.
     private static /* maybe a State, maybe nothing */ maybeSolve(int[][] board, List<int[]> cells, List<Integer> nums, Stack<Integer> stack) {
     	// TODO
     }
