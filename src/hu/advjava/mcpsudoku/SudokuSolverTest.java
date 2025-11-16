@@ -11,16 +11,8 @@ import static org.junit.jupiter.api.Assertions.*;
 public class SudokuSolverTest {
     @Test
     public void checkCondition() {
-//        Arrays.stream(ExampleSudoku.values()).forEach(exampleSudoku ->{
-//
-//            assertAll(
-//                    Arrays.stream(exampleSudoku.getOriginal()).map(e -> Arrays.stream(e).filter(n -> n != 0))
-//            )
-//             SudokuSolver.solve(exampleSudoku.getOriginal(), false);
-//        });
 
         Arrays.stream(ExampleSudoku.values()).forEach( exampleSudoku -> {
-
 
                 IntStream rowIndices = IntStream.range(0, 9);
                 Stream<int[]> coordinates = rowIndices.boxed().flatMap(r -> IntStream.range(0, 9).mapToObj(c -> new int[]{r, c}));
@@ -44,6 +36,10 @@ public class SudokuSolverTest {
             );
         });
 
+    }
+    @Test
+    public void checkDeprecatedCount() {
+        assertTrue(SudokuSolverDLX.countDeprecated() <= 8);
     }
 
 }

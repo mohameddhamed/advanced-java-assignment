@@ -1,10 +1,7 @@
 package hu.advjava.mcpsudoku;
 
-import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.Collections;
-import java.util.HashSet;
-import java.util.List;
+import java.util.*;
+import java.util.function.BiConsumer;
 import java.util.function.Consumer;
 import java.util.stream.IntStream;
 import java.util.stream.Stream;
@@ -104,7 +101,7 @@ public final class SudokuSolverDLX {
         applyGivens(board);
 
         boolean solved = searchOne();
-        if (solved) writeSolutionToBoard(board);
+        if (solved) writeSolutionToBoard.accept(board);
         return solved;
     }
 
@@ -271,7 +268,7 @@ public final class SudokuSolverDLX {
                     // find any node in that option’s row
                     Node any = findAnyNodeForRow(rowId);
                     if (any == null) throw new IllegalStateException("Internal error: row not found");
-                    selectRow(any);
+                    selectRow.accept(any);
                 }
             }
         }
@@ -320,13 +317,18 @@ public final class SudokuSolverDLX {
     }
 
 //    @Deprecated
-    private void selectRow(Node row) {
+//    private void selectRow(Node row) {
+//        // choose the row by covering all its columns (Algorithm X primary operation)
+//        solution[solutionPtr++] = row.rowId;
+//        for (Node j = row.R; j != row; j = j.R) cover(j.C);
+//        cover(row.C);
+//    }
+    private final Consumer<Node> selectRow = (Node row) -> {
         // choose the row by covering all its columns (Algorithm X primary operation)
         solution[solutionPtr++] = row.rowId;
-//        for (Node j = row.R; j != row; j = j.R) cover(j.C);
         Stream.iterate(row.R, j -> j != row, j -> j.R).forEach(node -> cover(node.C));
         cover(row.C);
-    }
+    };
 
     /*private void deselectRow(Node row) {
         uncover(row.C);
@@ -584,7 +586,7 @@ public final class SudokuSolverDLX {
                 Frame f = stack.get(i);
                 if (f != null) {
                     // undo a partially selected row and its column if needed
-                    uncoverChain(f.r, f.c);
+                    uncoverChain.accept(f.r, f.c);
                 }
             }
         }
@@ -600,7 +602,7 @@ public final class SudokuSolverDLX {
             if (header.R == header) {
                 int[][] sol = new int[N][N];
                 for (int r = 0; r < N; r++) Arrays.fill(sol[r], 0);
-                applySolutionToBoard(sol);
+                applySolutionToBoard.accept(sol);
                 solutionConsumer.accept(sol);
                 solutionCount++;
 
@@ -672,12 +674,17 @@ public final class SudokuSolverDLX {
     }
 
 //    @Deprecated
-    private void uncoverChain(Node r, Column c) {
-        // helper for early stop unwinding
+//    private void uncoverChain(Node r, Column c) {
+//        // helper for early stop unwinding
 //        for (Node j = r.L; j != r; j = j.L) uncover(j.C);
+//        Stream.iterate(r.L,  j -> j != r, j -> j.L).forEach(node -> uncover(node.C));
+//        uncover(c);
+//    }
+    private final BiConsumer<Node, Column> uncoverChain = (Node r, Column c) -> {
+        // helper for early stop unwinding
         Stream.iterate(r.L,  j -> j != r, j -> j.L).forEach(node -> uncover(node.C));
         uncover(c);
-    }
+    };
 
     private static final class StopSignal extends RuntimeException {
         private static final long serialVersionUID = 1L;
@@ -688,15 +695,14 @@ public final class SudokuSolverDLX {
     /* ===================== Solution materialization ===================== */
 
 //    @Deprecated
-    private void writeSolutionToBoard(int[][] board) {
-        // start by clearing; then place all selected rows (givens + found)
+//    private void writeSolutionToBoard(int[][] board) {
+//        // start by clearing; then place all selected rows (givens + found)
 //        for (int i = 0; i < N; i++) Arrays.fill(board[i], 0);
-        IntStream.range(0, N).forEach(i -> Arrays.fill(board[i], 0));
-        applySolutionToBoard(board);
-    }
+//        applySolutionToBoard(board);
+//    }
 
 //    @Deprecated
-    private void applySolutionToBoard(int[][] board) {
+//    private void applySolutionToBoard(int[][] board) {
 //        for (int i = 0; i < solutionPtr; i++) {
 //            int rowId = solution[i];
 //            int r = optRowR[rowId];
@@ -704,6 +710,8 @@ public final class SudokuSolverDLX {
 //            int d = optRowD[rowId];
 //            board[r][c] = d;
 //        }
+//    }
+    private final Consumer<int[][]> applySolutionToBoard = (int[][] board) -> {
         IntStream.range(0, solutionPtr).forEach(i -> {
             int rowId = solution[i];
             int r = optRowR[rowId];
@@ -711,7 +719,13 @@ public final class SudokuSolverDLX {
             int d = optRowD[rowId];
             board[r][c] = d;
         });
-    }
+    };
+
+    private final Consumer<int[][]> writeSolutionToBoard = (int[][] board) -> {
+        // start by clearing; then place all selected rows (givens + found)
+        IntStream.range(0, N).forEach(i -> Arrays.fill(board[i], 0));
+        applySolutionToBoard.accept(board);
+    };
 
     /* ===================== Utilities ===================== */
 
