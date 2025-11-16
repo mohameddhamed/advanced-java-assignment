@@ -16,7 +16,7 @@ public class SudokuSolverTest {
 
                 IntStream rowIndices = IntStream.range(0, 9);
                 Stream<int[]> coordinates = rowIndices.boxed().flatMap(r -> IntStream.range(0, 9).mapToObj(c -> new int[]{r, c}));
-                int[][] original = exampleSudoku.getOriginal(), solution = exampleSudoku.getSolution(), originalSolved = SudokuSolver.deepCopy(original);
+                int[][] original = exampleSudoku.getBoard(), solution = exampleSudoku.getSolution(), originalSolved = SudokuSolver.deepCopy(original);
                 SudokuSolver.State isSolved = SudokuSolver.solve(originalSolved, false);
 
             assertAll(

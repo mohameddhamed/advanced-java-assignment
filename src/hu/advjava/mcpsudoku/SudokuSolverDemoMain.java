@@ -10,7 +10,7 @@ public class SudokuSolverDemoMain {
         var puzzle = ExampleSudoku.EASY_1.getBoard();
 
         var solver = new SudokuSolverDLX(false);
-        boolean ok = solver.solve.test(puzzle);
+        boolean ok = solver.solve(puzzle);
         System.out.println("Solved: " + ok);
         if (ok) {
             stream(puzzle).map(Arrays::toString).forEach(IO::println);

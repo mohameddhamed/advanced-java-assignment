@@ -38,13 +38,13 @@ public class SudokuSolver {
 
         // returns a case-insensitive match to the names in the enumeration, and if no match is found a NoSuchElementException is thrown.
 		public static Difficulty stringToDifficulty(String difficulty) {
-                Optional<String> _difficutly = Arrays.stream(Difficulty.values()).map(Enum::name).filter((e) -> e.compareToIgnoreCase(difficulty) == 0).findAny();
-                return Difficulty.valueOf(_difficutly.get());
+                Optional<String> _difficulty = Arrays.stream(Difficulty.values()).map(Enum::name).filter((e) -> e.compareToIgnoreCase(difficulty) == 0).findAny();
+                return Difficulty.valueOf(_difficulty.orElseThrow(NoSuchElementException::new).toUpperCase());
 		}
 
         // which takes a long matches a filled cell number to the ranges provided, but in this case if no match is found, return NONE.
 		public static Difficulty numToDifficulty(long num) {
-            return Arrays.stream(Difficulty.values()).filter((e) -> e.minValue <= num && e.maxValue >= num).findAny().get();
+            return Arrays.stream(Difficulty.values()).filter((e) -> e.minValue <= num && e.maxValue >= num).findAny().orElseGet(() -> Difficulty.NONE);
 		}
 	}
 
@@ -91,47 +91,24 @@ public class SudokuSolver {
         if (file.getName().endsWith(".sud")) {
             try(ObjectInputStream ois = new ObjectInputStream(new FileInputStream(file))) {
                 board = (int[][]) ois.readObject();
-                if (!Arrays.stream(board).allMatch(e -> e.length == 9 && Arrays.stream(e).allMatch(number -> number >= 0 && number <= 9)))
+                if (board.length == 9 && !Arrays.stream(board).allMatch(row -> row.length == 9 && Arrays.stream(row).allMatch(number -> number >= 0 && number <= 9)))
                     throw new IOException();
             }
         } else {
             board = new int[9][9];
-//            Scanner scanner = new Scanner(new FileReader(file));
-//            int num = 0;
-//            while (scanner.hasNextInt()) {
-//                int nextInt = scanner.nextInt();
-//                if (num > 80 || nextInt < 0 || nextInt > 9) {
-//                    throw new IOException();
-//                }
-//                int numRow = num / 9, numCol = num % 9;
-//                board[numRow][numCol] = nextInt;
-//                num++;
-//            }
-//            if (num != 81) {
-//                throw new IOException();
-//            }
-
-//        BufferedReader br = new BufferedReader(new FileReader(file));
-//        IntStream Ints = br.lines().flatMapToInt(line -> Arrays.stream(line.split(" ")).mapToInt(Integer::parseInt)).filter(num -> num >= 0 && num <= 9);
-//        List<Integer> IntList = Ints.boxed().toList();
-//        if (IntList.size() < 81) throw new IOException();
-//        Iterator<Integer> nextInts  = IntList.iterator();
-//        IntStream.range(0, 81).forEach(num -> {
-//            var nextInt = nextInts.next();
-//            int numRow = num / 9, numCol = num % 9;
-//            board[numRow][numCol] = nextInt;
-//        });
-            Scanner scanner = new Scanner(new FileReader(file));
-            boolean valid = IntStream.range(0, 81).allMatch(num -> {
-                if (scanner.hasNext()) {
-                    var nextInt = scanner.nextInt();
-                    if (nextInt < 0 || nextInt > 9) return false;
-                    int numRow = num / 9, numCol = num % 9;
-                    board[numRow][numCol] = nextInt;
-                }
-                return false;
-            });
-            if (!valid) throw new IOException();
+            try (Scanner scanner = new Scanner(new FileReader(file))) {
+                boolean valid = IntStream.range(0, 81).allMatch(num -> {
+                    if (scanner.hasNext()) {
+                        var nextInt = scanner.nextInt();
+                        if (nextInt < 0 || nextInt > 9) return false;
+                        int numRow = num / 9, numCol = num % 9;
+                        board[numRow][numCol] = nextInt;
+                        return true;
+                    }
+                    return false;
+                });
+                if (!valid || scanner.hasNext()) throw new IOException();
+            }
         }
         return board;
 
@@ -157,7 +134,7 @@ public class SudokuSolver {
     //    Write countFilledCells to count the number of filled (non-zero) cells.
     public static long countFilledCells(int[][] board) {
     	return Arrays.stream(board).map(
-                e -> Arrays.stream(e).mapToLong((cell) -> cell == 0 ? 1 : 0).sum())
+                e -> Arrays.stream(e).mapToLong((cell) -> cell == 0 ? 0 : 1).sum())
                 .reduce(0L, Long::sum);
     }
 
@@ -184,63 +161,69 @@ public class SudokuSolver {
         //    It creates an empty 9×9 board and fills it with a random complete solution using solve in ssdlx.
         int[][] board = new int[9][9];
         boolean isFilledBoard = ssdlx.solve(board);
-        //    It creates all possible cell indexes in a list (cells) and puts them in a random order. Then it puts its iterator into a variable.
 
-        List<int[]> allPossibleIndexes = Stream.iterate(0, i -> i < 10, i -> i + 1).flatMap(row ->
-                IntStream.range(0, 10).mapToObj(col -> new int[]{row, col})
-        ).toList();
+        //    It creates all possible cell indexes in a list (cells) and puts them in a random order. Then it puts its iterator into a variable.
+        List<int[]> allPossibleIndexes = new ArrayList<>(Stream.iterate(0, i -> i < 9, i -> i + 1).flatMap(row ->
+                IntStream.range(0, 9).mapToObj(col -> new int[]{row, col})
+        ).toList());
 
         Collections.shuffle(allPossibleIndexes);
 
         Iterator<int[]> itsIterator = allPossibleIndexes.iterator();
 
-        //    Then it makes a stream using iterate.
+        // Then it makes a stream using iterate.
+        // Our goal is to remove enough cells so that we match the requirements of the difficulty level.
+        // Initially, the iteration state is a deepCopy of the generated board.
+        return Stream
+                .iterate(deepCopy(board),
+                    (_board) -> {
 
-        //    Our goal is to remove enough cells so that we match the requirements of the difficulty level.
+                        //    Make sure to take at most 9×9 steps: we don't have more board cells.
+                        //    If the board in the state is of the expected difficulty, we're done.
+                        return itsIterator.hasNext() && Difficulty.numToDifficulty(countFilledCells(_board)) != diff;
 
-        //            Initially, the iteration state is a deepCopy of the generated board.
-        Stream.iterate(deepCopy(board), (_board) -> {
-            //    Make sure to take at most 9×9 steps: we don't have more board cells.
-            //    If the board in the state is of the expected difficulty, we're done.
+                    }, (_board) -> {
+                        //    In each iteration:
+                        int[][] tempBoard = deepCopy(_board);
+                        //    Take the next cell by the iterator and erase its value on the board (set it as zero).
+                        int[] nextValue = itsIterator.next();
+                        int originalValue = tempBoard[nextValue[0]][nextValue[1]];
+                        tempBoard[nextValue[0]][nextValue[1]] = 0;
+                        //    See if the board is still uniquely solvable: use the DLX solution counter with a limit of 2, and if it returns 1, it is.
+                        if (ssdlx.countSolutions(tempBoard, 2) != 1) {
+                            //    If the board has no unique solution anymore, put the digit back from the original solution.
+                            tempBoard[nextValue[0]][nextValue[1]] = originalValue;
+                        }
+                        //    Return the board itself so that the condition in the following step is easy to check.
+                        return tempBoard;
 
-            return countFilledCells(_board) == 0 || Difficulty.numToDifficulty(countFilledCells(_board)) == diff;
+                    })
+                .filter(b -> Difficulty.numToDifficulty(countFilledCells(b)) == diff)
+                .findFirst();
 
-        }, (_board) -> {
-            //    In each iteration:
-            //    Take the next cell by the iterator and erase its value on the board (set it as zero).
-            int[] nextValue = itsIterator.next();
-            int originalValue = _board[nextValue[0]][nextValue[1]];
-            _board[nextValue[0]][nextValue[1]] = 0;
-            //    See if the board is still uniquely solvable: use the DLX solution counter with a limit of 2, and if it returns 1, it is.
-            if (ssdlx.countSolutions(board, 2) != 1) {
-                //    If the board has no unique solution anymore, put the digit back from the original solution.
-                _board[nextValue[0]][nextValue[1]] = originalValue;
-            }
-            //    Return the board itself so that the condition in the following step is easy to check.
-            return _board;
-
-        });
-
-        return Optional.of(board);
     }
 
 	public static State solveCount(int[][] board) {
-    	return State.stateFromSols(new SudokuSolverDLX(false).countSolutions.applyAsLong(board, 4L));
+    	return State.stateFromSols(new SudokuSolverDLX(false).countSolutions(board, 4L));
     }
 
     record Remaining(int cellIdx, Iterator<Integer> digits) {}
 
     //    Implement solve in SudokuSolver.
-
     //    The method prepares a couple of variables.
-
 	public static State solve(int[][] board, boolean randomize) {
-        //    cells are those cells on the board that contain 0. These are the cells that we are trying to fill in here.
-        List<int[]> cells = Arrays.stream(board).map(row -> Arrays.stream(row).filter(col -> col == 0).toArray()).collect(Collectors.toList());
-//                .flatMapToInt(row -> Arrays.stream(row).filter(col -> col == 0)).boxed().collect(Collectors.toList());
-        //    Both are in random order if the parameter says so.
+
+        // cells are those cells on the board that contain 0. These are the cells that we are trying to fill in here.
+        List<int[]> cells = IntStream.range(0, 9).boxed()
+                .flatMap(row -> IntStream.range(0, 9)
+                        .filter(col -> board[row][col] == 0)
+                        .mapToObj(col -> new int[]{row, col})
+                ).collect(Collectors.toList());
+
+        // Both are in random order if the parameter says so.
         if (randomize) Collections.shuffle(cells);// TODO [0,0], [0,1], ..., [8,8] as a modifiable list
-        //    digits are the numbers 1..9. These are the values that we are trying to put in.
+
+        // digits are the numbers 1..9. These are the values that we are trying to put in.
         // in random order if `randomize` is on
         List<Integer> digits = Arrays.asList(1, 2, 3, 4, 5, 6, 7, 8, 9);
         if (randomize) Collections.shuffle(digits); // 1,...,9 as a list; in random order if `randomize` is on
@@ -249,25 +232,22 @@ public class SudokuSolver {
         if (cells.isEmpty()) return State.SOLVED;
 
         var stack = new Stack<Integer>();
-        stack.add(0);
+        stack.add(-1);
 
 		return findContent(() -> maybeSolve(board, cells, digits, stack));
 	}
 
-//    maybeSolve does the heavy lifting here.
-
-
-//    As we are trying to fit in a new value, let's call isSafe to check if we may. If we may not, we return: the result is undecided.
-//    Let's set the cell's value on the board now. If it was the last position in cells, then congratulations, the board is complete, and the result is SOLVED.
-//    Otherwise, more cells need to be filled in. Let's put 0 on the stack, and the result is still undecided.
-//    Note: all of this implements a backtracking Sudoku solver.
+    //    maybeSolve does the heavy lifting here.
+    //    As we are trying to fit in a new value, let's call isSafe to check if we may. If we may not, we return: the result is undecided.
+    //    Let's set the cell's value on the board now. If it was the last position in cells, then congratulations, the board is complete, and the result is SOLVED.
+    //    Otherwise, more cells need to be filled in. Let's put 0 on the stack, and the result is still undecided.
+    //    Note: all of this implements a backtracking Sudoku solver.
     private static /* maybe a State, maybe nothing */ Optional<State>  maybeSolve(int[][] board, List<int[]> cells, List<Integer> nums, Stack<Integer> stack) {
+
         //    It keeps track of a stack: the digits that we have already put in.
         //    If nth element of the stack is i, that means that we have currently inserted digits[i] into cells[n].
         //    We start by trying the first potential digit in the first position.
         //    It does the following.
-
-
         //    If the stack is empty, we have failed to fill in the puzzle, and the result is INVALID.
         if (stack.isEmpty()) return Optional.of(State.INVALID);
 
@@ -296,7 +276,7 @@ public class SudokuSolver {
                 return Optional.of(State.SOLVED);
             }
             //    Otherwise, more cells need to be filled in. Let's put 0 on the stack, and the result is still undecided.
-            stack.push(0);
+            stack.push(-1);
             return Optional.empty();
         }
         return Optional.empty();
@@ -306,10 +286,13 @@ public class SudokuSolver {
 //    Write isSafe which tells if num is anywhere on the given row row,
 //    anywhere on the given column col or anywhere in the 3x3 box that starts at (row-row%3, col-row%3).
     private static boolean isSafe(int[][] board, int row, int col, int num) {
-        int numRow = num / 9, numCol = num % 9, minRow = row-(row%3), minCol = col-(col%3);
-        BiPredicate<Integer, Integer> inRange = (_numRow, _numCol) -> (_numRow >= minRow && _numRow <= minRow + 2 && _numCol >= minCol && _numCol <= minCol + 2);
-        BiPredicate<Integer, Integer> safeArea = (_numRow, _numCol) -> _numRow == row || _numCol == col || inRange.test(_numRow, _numCol);
+        int minRow = row-(row%3), minCol = col-(col%3);
 
-        return safeArea.test(numRow, numCol);
+        boolean isInRow = Arrays.stream(board[row]).anyMatch(cell -> cell == num);
+        boolean isInCol = Arrays.stream(board).map(r-> r[col]).anyMatch(cell -> cell == num);
+        boolean isInRange = IntStream.range(minRow, minRow + 3).anyMatch(r -> IntStream.range(minCol, minCol + 3).anyMatch(c -> board[r][c] == num));
+
+        return !isInCol && !isInRange && !isInRow;
+
     }
 }

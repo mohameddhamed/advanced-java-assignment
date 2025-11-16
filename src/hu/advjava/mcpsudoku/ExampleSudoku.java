@@ -3,7 +3,6 @@ package hu.advjava.mcpsudoku;
 import java.util.Arrays;
 import java.util.function.BiFunction;
 import java.util.function.Function;
-import java.util.function.UnaryOperator;
 
 /**
  * Example puzzles
@@ -192,7 +191,7 @@ public enum ExampleSudoku {
 
     private int[][] original, solution;
 
-    public int[][] getOriginal() {
+    public int[][] getBoard() {
         return deepCopyBoard.apply(original);
     }
     public int[][] getSolution() {
@@ -200,10 +199,10 @@ public enum ExampleSudoku {
     }
 
     private ExampleSudoku(int[][] original, int[][] solution) {
-        this.original = original;
-        this.solution = solution;
+        this.original = SudokuSolver.deepCopy(original);
+        this.solution = SudokuSolver.deepCopy(solution);
     }
-    public static final BiFunction<String, Function<String, String>,ExampleSudoku>findByName =
+    public static final BiFunction<String, Function<String, String>,ExampleSudoku> findByName =
             (expected,getName)->
                     Arrays.stream(ExampleSudoku.values()).filter(sudoko -> expected.equals(getName.apply(sudoko.name()))).findAny().get();
 
