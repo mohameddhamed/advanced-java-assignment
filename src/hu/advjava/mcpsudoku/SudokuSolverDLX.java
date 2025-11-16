@@ -7,6 +7,7 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.function.Consumer;
 import java.util.stream.IntStream;
+import java.util.stream.Stream;
 
 /**
  * SudokuSolverDLX
@@ -318,11 +319,12 @@ public final class SudokuSolverDLX {
         c.L.R = c;
     }
 
-    @Deprecated
+//    @Deprecated
     private void selectRow(Node row) {
         // choose the row by covering all its columns (Algorithm X primary operation)
         solution[solutionPtr++] = row.rowId;
-        for (Node j = row.R; j != row; j = j.R) cover(j.C);
+//        for (Node j = row.R; j != row; j = j.R) cover(j.C);
+        Stream.iterate(row.R, j -> j != row, j -> j.R).forEach(node -> cover(node.C));
         cover(row.C);
     }
 
@@ -669,10 +671,11 @@ public final class SudokuSolverDLX {
         }
     }
 
-    @Deprecated
+//    @Deprecated
     private void uncoverChain(Node r, Column c) {
         // helper for early stop unwinding
-        for (Node j = r.L; j != r; j = j.L) uncover(j.C);
+//        for (Node j = r.L; j != r; j = j.L) uncover(j.C);
+        Stream.iterate(r.L,  j -> j != r, j -> j.L).forEach(node -> uncover(node.C));
         uncover(c);
     }
 
@@ -684,22 +687,30 @@ public final class SudokuSolverDLX {
 
     /* ===================== Solution materialization ===================== */
 
-    @Deprecated
+//    @Deprecated
     private void writeSolutionToBoard(int[][] board) {
         // start by clearing; then place all selected rows (givens + found)
-        for (int i = 0; i < N; i++) Arrays.fill(board[i], 0);
+//        for (int i = 0; i < N; i++) Arrays.fill(board[i], 0);
+        IntStream.range(0, N).forEach(i -> Arrays.fill(board[i], 0));
         applySolutionToBoard(board);
     }
 
-    @Deprecated
+//    @Deprecated
     private void applySolutionToBoard(int[][] board) {
-        for (int i = 0; i < solutionPtr; i++) {
+//        for (int i = 0; i < solutionPtr; i++) {
+//            int rowId = solution[i];
+//            int r = optRowR[rowId];
+//            int c = optRowC[rowId];
+//            int d = optRowD[rowId];
+//            board[r][c] = d;
+//        }
+        IntStream.range(0, solutionPtr).forEach(i -> {
             int rowId = solution[i];
             int r = optRowR[rowId];
             int c = optRowC[rowId];
             int d = optRowD[rowId];
             board[r][c] = d;
-        }
+        });
     }
 
     /* ===================== Utilities ===================== */
