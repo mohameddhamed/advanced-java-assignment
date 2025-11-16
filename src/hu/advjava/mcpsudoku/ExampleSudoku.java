@@ -191,6 +191,10 @@ public enum ExampleSudoku {
 
     private int[][] original, solution;
 
+    public boolean isEmpty() {
+        return Arrays.stream(original).allMatch(row -> Arrays.stream(row).allMatch(cell -> cell == 0));
+    }
+
     public int[][] getBoard() {
         return deepCopyBoard.apply(original);
     }

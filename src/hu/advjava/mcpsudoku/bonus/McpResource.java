@@ -307,7 +307,7 @@ public class McpResource {
 		            return errorEnvelope(id, -32601, "Unknown resource: " + uri);
 	            }
 
-	            var board = maybeExample.get().getBoard();
+	            var board = maybeExample.getBoard();
 				var boardJson = boardToJson(board);
 
 	            result = Json.createObjectBuilder()
