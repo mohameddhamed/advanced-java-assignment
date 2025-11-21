@@ -23,7 +23,7 @@ public class SudokuSolverTest {
             () -> {
                 coordinates.forEach(coordinate -> {
                     int row = coordinate[0], col = coordinate[1];
-                    if (solution[row][col] != 0) {
+                    if (original[row][col] != 0) {
                         assertEquals(solution[row][col], original[row][col]);
                     }
                 });

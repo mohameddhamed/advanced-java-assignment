@@ -255,7 +255,7 @@ public class SudokuSolver {
         //    Otherwise, we try to put in a new value to the current cell.
         int lastDigitWeTried = stack.peek();
         //    If we are out of values (the topmost element is 9 indicating that we have tried all values of digits at the current cell),
-        if (lastDigitWeTried == 9) {
+        if (lastDigitWeTried == 8) {
             //    then we pop the top element off the stack, set the board's cell as empty, and we return: the result is still undecided.
             stack.pop();
             int row = currentCell[0], col = currentCell[1];
